@@ -41,9 +41,8 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
 
     it("should revert deployment if verifier is zero address", async function () {
       const ZKRollupPayments = await hre.ethers.getContractFactory("ZKRollupPayments");
-      await expect(ZKRollupPayments.deploy(hre.ethers.ZeroAddress)).to.be.revertedWithCustomError(
-        rollup,
-        "ZeroAddress"
+      await expect(ZKRollupPayments.deploy(hre.ethers.ZeroAddress)).to.be.revertedWith(
+        "ZKRollup: zero address"
       );
     });
   });
@@ -64,16 +63,15 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
     });
 
     it("reverts when adding zero address relayer", async function () {
-      await expect(rollup.addRelayer(hre.ethers.ZeroAddress)).to.be.revertedWithCustomError(
-        rollup,
-        "ZeroAddress"
+      await expect(rollup.addRelayer(hre.ethers.ZeroAddress)).to.be.revertedWith(
+        "ZKRollup: zero address"
       );
     });
 
     it("non-owner cannot add relayer", async function () {
       await expect(
         rollup.connect(user1).addRelayer(user2.address)
-      ).to.be.revertedWithCustomError(rollup, "NotOwner");
+      ).to.be.revertedWith("ZKRollup: not owner");
     });
 
     it("owner can transfer ownership", async function () {
@@ -85,9 +83,8 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
     });
 
     it("reverts transfer ownership to zero address", async function () {
-      await expect(rollup.transferOwnership(hre.ethers.ZeroAddress)).to.be.revertedWithCustomError(
-        rollup,
-        "ZeroAddress"
+      await expect(rollup.transferOwnership(hre.ethers.ZeroAddress)).to.be.revertedWith(
+        "ZKRollup: zero address"
       );
     });
   });
@@ -110,20 +107,18 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
     it("blocks deposit, commitBatch, and withdraw when paused", async function () {
       await rollup.pause();
 
-      await expect(rollup.connect(user1).deposit({ value: hre.ethers.parseEther("1.0") })).to.be.revertedWithCustomError(
-        rollup,
-        "ContractPaused"
+      await expect(rollup.connect(user1).deposit({ value: hre.ethers.parseEther("1.0") })).to.be.revertedWith(
+        "ZKRollup: paused"
       );
 
       const newStateRoot = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("newRoot"));
       const batchHash = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("batch1"));
       await expect(
         rollup.commitBatch(newStateRoot, batchHash, 1, "0x", [])
-      ).to.be.revertedWithCustomError(rollup, "ContractPaused");
+      ).to.be.revertedWith("ZKRollup: paused");
 
-      await expect(rollup.connect(user1).withdraw(hre.ethers.parseEther("1.0"))).to.be.revertedWithCustomError(
-        rollup,
-        "ContractPaused"
+      await expect(rollup.connect(user1).withdraw(hre.ethers.parseEther("1.0"))).to.be.revertedWith(
+        "ZKRollup: paused"
       );
     });
   });
@@ -140,9 +135,8 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
     });
 
     it("reverts 0 amount deposit", async function () {
-      await expect(rollup.connect(user1).deposit({ value: 0 })).to.be.revertedWithCustomError(
-        rollup,
-        "AmountZero"
+      await expect(rollup.connect(user1).deposit({ value: 0 })).to.be.revertedWith(
+        "ZKRollup: amount zero"
       );
     });
   });
@@ -178,7 +172,7 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
 
       await expect(
         rollup.connect(user1).commitBatch(newStateRoot, batchHash, 1, "0x", [])
-      ).to.be.revertedWithCustomError(rollup, "NotRelayer");
+      ).to.be.revertedWith("ZKRollup: not relayer");
     });
 
     it("reverts if newStateRoot is zero or txCount is 0", async function () {
@@ -186,12 +180,12 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
 
       await expect(
         rollup.commitBatch(hre.ethers.ZeroHash, batchHash, 1, "0x", [])
-      ).to.be.revertedWithCustomError(rollup, "InvalidStateRoot");
+      ).to.be.revertedWith("ZKRollup: invalid state root");
 
       const newStateRoot = hre.ethers.keccak256(hre.ethers.toUtf8Bytes("newRoot"));
       await expect(
         rollup.commitBatch(newStateRoot, batchHash, 0, "0x", [])
-      ).to.be.revertedWithCustomError(rollup, "EmptyBatch");
+      ).to.be.revertedWith("ZKRollup: empty batch");
     });
   });
 
@@ -215,11 +209,11 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
 
       await expect(
         rollup.connect(user1).withdraw(0)
-      ).to.be.revertedWithCustomError(rollup, "AmountZero");
+      ).to.be.revertedWith("ZKRollup: amount zero");
 
       await expect(
         rollup.connect(user1).withdraw(hre.ethers.parseEther("2.0"))
-      ).to.be.revertedWithCustomError(rollup, "InsufficientBalance");
+      ).to.be.revertedWith("ZKRollup: insufficient balance");
     });
 
     it("user can withdraw via ZK proof using withdrawWithProof", async function () {
@@ -248,7 +242,7 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
 
       await expect(
         rollup.connect(user2).withdrawWithProof(withdrawAmount, withdrawalHash, "0x", [])
-      ).to.be.revertedWithCustomError(rollup, "AlreadyExecuted");
+      ).to.be.revertedWith("ZKRollup: already executed");
     });
 
     it("reverts withdrawWithProof if contract balance is insufficient", async function () {
@@ -257,7 +251,7 @@ describe("ZKRollupPayments & StubZKVerifier", function () {
 
       await expect(
         rollup.connect(user2).withdrawWithProof(withdrawAmount, withdrawalHash, "0x", [])
-      ).to.be.revertedWithCustomError(rollup, "InsufficientContractBalance");
+      ).to.be.revertedWith("ZKRollup: insufficient contract balance");
     });
   });
 });
