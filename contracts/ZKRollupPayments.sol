@@ -4,23 +4,6 @@ pragma solidity ^0.8.20;
 import "./interfaces/IZKVerifier.sol";
 
 contract ZKRollupPayments {
-    // Custom Errors for maximum gas efficiency
-    error NotOwner();
-    error NotRelayer();
-    error InvalidProof();
-    error InsufficientBalance();
-    error TransferFailed();
-    error ZeroAddress();
-    error AmountZero();
-    error AlreadyPaused();
-    error NotPaused();
-    error ContractPaused();
-    error ReentrantCall();
-    error InvalidStateRoot();
-    error EmptyBatch();
-    error AlreadyExecuted();
-    error InsufficientContractBalance();
-
     struct BatchRecord {
         bytes32 oldStateRoot;
         bytes32 newStateRoot;
@@ -30,7 +13,6 @@ contract ZKRollupPayments {
         address relayer;
     }
 
-    // verifier is immutable to eliminate SLOAD gas costs
     address public immutable verifier;
     bytes32 public currentStateRoot;
     uint256 public batchCount;
@@ -42,18 +24,15 @@ contract ZKRollupPayments {
     bool public paused;
     mapping(address => bool) private _relayers;
 
-    // Reentrancy guard state
     uint256 private constant _NOT_ENTERED = 1;
     uint256 private constant _ENTERED = 2;
     uint256 private _status;
 
-    // Core events
     event Deposited(address indexed user, uint256 amount, uint256 newBalance);
     event BatchCommitted(uint256 indexed batchIndex, bytes32 newStateRoot, bytes32 batchHash, uint256 txCount, address relayer);
     event Withdrawn(address indexed user, uint256 amount);
     event WithdrawalWithProof(address indexed user, uint256 amount, bytes32 indexed withdrawalHash);
 
-    // Administrative & Security events
     event RelayerAdded(address indexed relayer);
     event RelayerRemoved(address indexed relayer);
     event Paused(address account);
@@ -61,24 +40,24 @@ contract ZKRollupPayments {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
-        if (msg.sender != owner) revert NotOwner();
+        require(msg.sender == owner, "ZKRollup: not owner");
         _;
     }
 
     modifier whenNotPaused() {
-        if (paused) revert ContractPaused();
+        require(!paused, "ZKRollup: paused");
         _;
     }
 
     modifier nonReentrant() {
-        if (_status == _ENTERED) revert ReentrantCall();
+        require(_status != _ENTERED, "ZKRollup: reentrant call");
         _status = _ENTERED;
         _;
         _status = _NOT_ENTERED;
     }
 
     constructor(address _verifier) {
-        if (_verifier == address(0)) revert ZeroAddress();
+        require(_verifier != address(0), "ZKRollup: zero address");
         verifier = _verifier;
         currentStateRoot = bytes32(0);
         owner = msg.sender;
@@ -88,25 +67,25 @@ contract ZKRollupPayments {
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert ZeroAddress();
+        require(newOwner != address(0), "ZKRollup: zero address");
         emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
     }
 
     function pause() external onlyOwner {
-        if (paused) revert AlreadyPaused();
+        require(!paused, "ZKRollup: already paused");
         paused = true;
         emit Paused(msg.sender);
     }
 
     function unpause() external onlyOwner {
-        if (!paused) revert NotPaused();
+        require(paused, "ZKRollup: not paused");
         paused = false;
         emit Unpaused(msg.sender);
     }
 
     function addRelayer(address relayer) external onlyOwner {
-        if (relayer == address(0)) revert ZeroAddress();
+        require(relayer != address(0), "ZKRollup: zero address");
         _relayers[relayer] = true;
         emit RelayerAdded(relayer);
     }
@@ -121,7 +100,7 @@ contract ZKRollupPayments {
     }
 
     function deposit() external payable whenNotPaused nonReentrant {
-        if (msg.value == 0) revert AmountZero();
+        require(msg.value > 0, "ZKRollup: amount zero");
         uint256 newBalance = deposits[msg.sender] + msg.value;
         deposits[msg.sender] = newBalance;
         emit Deposited(msg.sender, msg.value, newBalance);
@@ -134,10 +113,13 @@ contract ZKRollupPayments {
         bytes calldata proof,
         uint256[] calldata publicInputs
     ) external whenNotPaused nonReentrant {
-        if (!_relayers[msg.sender]) revert NotRelayer();
-        if (!IZKVerifier(verifier).verifyProof(proof, publicInputs)) revert InvalidProof();
-        if (newStateRoot == bytes32(0)) revert InvalidStateRoot();
-        if (txCount == 0) revert EmptyBatch();
+        require(_relayers[msg.sender], "ZKRollup: not relayer");
+        require(
+            IZKVerifier(verifier).verifyProof(proof, publicInputs),
+            "ZKRollup: invalid proof"
+        );
+        require(newStateRoot != bytes32(0), "ZKRollup: invalid state root");
+        require(txCount > 0, "ZKRollup: empty batch");
 
         bytes32 oldStateRoot = currentStateRoot;
         currentStateRoot = newStateRoot;
@@ -160,16 +142,16 @@ contract ZKRollupPayments {
     }
 
     function withdraw(uint256 amount) external whenNotPaused nonReentrant {
-        if (amount == 0) revert AmountZero();
+        require(amount > 0, "ZKRollup: amount zero");
         uint256 userBalance = deposits[msg.sender];
-        if (userBalance < amount) revert InsufficientBalance();
+        require(userBalance >= amount, "ZKRollup: insufficient balance");
         
         unchecked {
             deposits[msg.sender] = userBalance - amount;
         }
 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
-        if (!success) revert TransferFailed();
+        require(success, "ZKRollup: transfer failed");
 
         emit Withdrawn(msg.sender, amount);
     }
@@ -180,15 +162,18 @@ contract ZKRollupPayments {
         bytes calldata proof,
         uint256[] calldata publicInputs
     ) external whenNotPaused nonReentrant {
-        if (amount == 0) revert AmountZero();
-        if (executedWithdrawals[withdrawalHash]) revert AlreadyExecuted();
-        if (address(this).balance < amount) revert InsufficientContractBalance();
-        if (!IZKVerifier(verifier).verifyProof(proof, publicInputs)) revert InvalidProof();
+        require(amount > 0, "ZKRollup: amount zero");
+        require(!executedWithdrawals[withdrawalHash], "ZKRollup: already executed");
+        require(address(this).balance >= amount, "ZKRollup: insufficient contract balance");
+        require(
+            IZKVerifier(verifier).verifyProof(proof, publicInputs),
+            "ZKRollup: invalid proof"
+        );
 
         executedWithdrawals[withdrawalHash] = true;
 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
-        if (!success) revert TransferFailed();
+        require(success, "ZKRollup: transfer failed");
 
         emit Withdrawn(msg.sender, amount);
         emit WithdrawalWithProof(msg.sender, amount, withdrawalHash);
