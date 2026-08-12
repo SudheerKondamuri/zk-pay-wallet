@@ -47,7 +47,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
       );
 
       if (authenticated && mounted) {
-        _unlock();
+        await _unlock();
       }
     } catch (_) {
       // Biometric not available — fall through to PIN.
@@ -82,7 +82,7 @@ class _LockScreenState extends ConsumerState<LockScreen> {
 
     if (_pin == savedPin) {
       HapticFeedback.mediumImpact();
-      _unlock();
+      await _unlock();
     } else {
       HapticFeedback.heavyImpact();
       setState(() {
@@ -92,9 +92,9 @@ class _LockScreenState extends ConsumerState<LockScreen> {
     }
   }
 
-  void _unlock() {
+  Future<void> _unlock() async {
     // Load wallet credentials.
-    _loadWallet();
+    await _loadWallet();
     ref.read(authStateProvider.notifier).unlock();
     if (mounted) context.go(AppRoutes.dashboard);
   }
