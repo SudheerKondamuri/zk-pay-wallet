@@ -51,10 +51,35 @@ app.post('/intents', async (req, res) => {
   try {
     const { fromAddress, toAddress, amountWei } = req.body;
     
-    // Check on-chain balance
-    const onChainBalance = await rollupContract.deposits(fromAddress);
-    if (BigInt(amountWei) > onChainBalance) {
-      return res.status(400).json({ error: 'Insufficient on-chain deposit' });
+    // Calculate L2 Balance from DB
+    const depositResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_deposits FROM deposits WHERE user_address = $1`,
+      [fromAddress]
+    );
+    const totalDeposits = BigInt(depositResult.rows[0].total_deposits);
+
+    const withdrawalResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_withdrawals FROM withdrawals WHERE user_address = $1`,
+      [fromAddress]
+    );
+    const totalWithdrawals = BigInt(withdrawalResult.rows[0].total_withdrawals);
+
+    const sentResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_sent FROM payment_intents WHERE from_address = $1`,
+      [fromAddress]
+    );
+    const totalSent = BigInt(sentResult.rows[0].total_sent);
+
+    const receivedResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_received FROM payment_intents WHERE to_address = $1`,
+      [fromAddress]
+    );
+    const totalReceived = BigInt(receivedResult.rows[0].total_received);
+
+    const l2Balance = totalDeposits + totalReceived - totalWithdrawals - totalSent;
+
+    if (BigInt(amountWei) > l2Balance) {
+      return res.status(400).json({ error: 'Insufficient L2 balance' });
     }
     
     const result = await pool.query(
@@ -120,11 +145,38 @@ app.get('/batches/:batchIndex', async (req, res) => {
 app.get('/deposits/:address', async (req, res) => {
   try {
     const { address } = req.params;
-    const balanceWei = await rollupContract.deposits(address);
+    
+    // Calculate L2 Balance from DB
+    const depositResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_deposits FROM deposits WHERE user_address = $1`,
+      [address]
+    );
+    const totalDeposits = BigInt(depositResult.rows[0].total_deposits);
+
+    const withdrawalResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_withdrawals FROM withdrawals WHERE user_address = $1`,
+      [address]
+    );
+    const totalWithdrawals = BigInt(withdrawalResult.rows[0].total_withdrawals);
+
+    const sentResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_sent FROM payment_intents WHERE from_address = $1`,
+      [address]
+    );
+    const totalSent = BigInt(sentResult.rows[0].total_sent);
+
+    const receivedResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_received FROM payment_intents WHERE to_address = $1`,
+      [address]
+    );
+    const totalReceived = BigInt(receivedResult.rows[0].total_received);
+
+    const l2Balance = totalDeposits + totalReceived - totalWithdrawals - totalSent;
+
     res.json({ 
       address, 
-      balanceWei: balanceWei.toString(),
-      balanceEth: ethers.formatEther(balanceWei)
+      balanceWei: l2Balance.toString(),
+      balanceEth: ethers.formatEther(l2Balance)
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -147,7 +199,7 @@ app.get('/state', async (req, res) => {
 });
 
 async function runMigrations() {
-  const migrationsPath = path.join(__dirname, '..', '..', 'migrations', '01-init.sql');
+  const migrationsPath = path.join(__dirname, '..', 'migrations', '01-init.sql');
   const sql = fs.readFileSync(migrationsPath, 'utf8');
   await pool.query(sql);
   console.log('Database migrations applied successfully.');

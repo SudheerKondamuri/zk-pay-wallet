@@ -77,8 +77,16 @@ async function main() {
     }
   });
 
-  rollupContract.on("Withdrawn", async (user, amount) => {
-    console.log(`[WITHDRAW] address=${user} amount=${amount.toString()}`);
+  rollupContract.on("Withdrawn", async (user, amount, event) => {
+    console.log(`[INDEXER] Withdrawn: user=${user}, amount=${amount.toString()}`);
+    try {
+      await pool.query(
+        `INSERT INTO withdrawals (user_address, amount_wei, tx_hash, block_number) VALUES ($1, $2, $3, $4)`,
+        [user, amount.toString(), event.log.transactionHash, event.log.blockNumber]
+      );
+    } catch (e) {
+      console.error("Indexer withdrawal error:", e);
+    }
   });
 
   console.log("Indexer started...");

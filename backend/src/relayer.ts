@@ -40,7 +40,7 @@ async function getProviderAndContract() {
 
 async function runRelayer() {
   try {
-    const res = await pool.query(`SELECT * FROM payment_intents WHERE status = 'pending' ORDER BY created_at ASC LIMIT 10`);
+    const res = await pool.query(`SELECT * FROM payment_intents WHERE status = 'pending' ORDER BY created_at ASC LIMIT 10 FOR UPDATE SKIP LOCKED`);
     if (res.rows.length === 0) return;
     
     const intents = res.rows;

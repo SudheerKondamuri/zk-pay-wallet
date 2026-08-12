@@ -32,3 +32,12 @@ CREATE TABLE IF NOT EXISTS deposits (
   block_number INTEGER NOT NULL,
   indexed_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS withdrawals (
+  id SERIAL PRIMARY KEY,
+  user_address VARCHAR(42) NOT NULL,
+  amount_wei NUMERIC(78,0) NOT NULL,
+  tx_hash VARCHAR(66) NOT NULL,
+  block_number INTEGER NOT NULL,
+  indexed_at TIMESTAMPTZ DEFAULT NOW()
+);
