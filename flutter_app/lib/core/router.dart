@@ -70,7 +70,10 @@ GoRouter buildRouter(WidgetRef ref) {
       }
 
       // If wallet exists but locked, redirect to lock screen
-      if (hasWallet && isLocked && currentPath != AppRoutes.lock) {
+      if (hasWallet &&
+          isLocked &&
+          currentPath != AppRoutes.lock &&
+          currentPath != AppRoutes.setupPin) {
         return AppRoutes.lock;
       }
 
