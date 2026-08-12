@@ -37,13 +37,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     final storage = ref.read(secureStorageServiceProvider);
     final hasWallet = await storage.hasWallet();
+    final hasPin = await storage.hasPin();
 
     ref.read(authStateProvider.notifier).setHasWallet(hasWallet);
 
     if (!mounted) return;
 
     if (hasWallet) {
-      context.go(AppRoutes.lock);
+      if (hasPin) {
+        context.go(AppRoutes.lock);
+      } else {
+        context.go(AppRoutes.setupPin);
+      }
     } else {
       context.go(AppRoutes.welcome);
     }
