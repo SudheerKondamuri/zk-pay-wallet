@@ -37,15 +37,15 @@ class BatchDetailScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _MetaRow(label: 'Batch Index', value: '#$batchIndex'),
+                      _MetaRow(label: 'Batch index', value: '#$batchIndex'),
                       const SizedBox(height: AppSpacing.sm),
                       _MetaRow(
-                          label: 'State Root',
+                          label: 'State root',
                           value: shortenAddress(stateRoot)),
                       if (txHash.isNotEmpty) ...[
                         const SizedBox(height: AppSpacing.sm),
                         _MetaRow(
-                            label: 'Tx Hash',
+                            label: 'Tx hash',
                             value: shortenAddress(txHash)),
                       ],
                       const SizedBox(height: AppSpacing.sm),
