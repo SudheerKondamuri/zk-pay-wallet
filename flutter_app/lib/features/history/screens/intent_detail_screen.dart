@@ -3,9 +3,10 @@ import 'package:flutter/services.dart';
 import '../../../core/constants.dart';
 import '../../../app/theme.dart';
 import '../../../core/utils.dart';
+import '../models/activity_item.dart';
 import '../../../shared/flat_card.dart';
 
-/// Screen 15 — Intent Detail. All fields from a single intent.
+/// Screen 15 — Activity / Intent Detail. All fields from an activity record.
 class IntentDetailScreen extends StatelessWidget {
   final Map<String, dynamic> intent;
 
@@ -13,36 +14,103 @@ class IntentDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final id = intent['id']?.toString() ?? '—';
-    final from = intent['from_address'] as String? ?? '';
-    final to = intent['to_address'] as String? ?? '';
-    final amountWei = intent['amount_wei']?.toString() ?? '0';
-    final status = intent['status'] as String? ?? 'pending';
-    final batchIndex = intent['batch_index'];
-    final createdAt = intent['created_at'] as String? ?? '';
+    // Deserialize or parse from map
+    final item = ActivityItem.fromJson(intent);
+
+    String title;
+    switch (item.type) {
+      case ActivityType.deposit:
+        title = 'Deposit';
+        break;
+      case ActivityType.withdraw:
+        title = 'Withdrawal';
+        break;
+      case ActivityType.send:
+        title = 'Transfer intent #${item.id}';
+        break;
+    }
 
     return Scaffold(
-      appBar: AppBar(title: Text('Intent #$id')),
+      appBar: AppBar(title: Text(title)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildField(context, 'Status', status, _statusColor(status)),
+              _buildField(
+                context,
+                'Status',
+                item.status.name,
+                _statusColor(item.status),
+              ),
               const SizedBox(height: AppSpacing.base),
-              _buildField(context, 'Amount', '${weiToEth(amountWei)} ETH'),
+              _buildField(
+                context,
+                'Type',
+                item.type.name.toUpperCase(),
+                item.type == ActivityType.deposit
+                    ? AppColors.secondaryGold
+                    : AppColors.primaryAccent,
+              ),
               const SizedBox(height: AppSpacing.base),
-              _buildCopyField(context, 'From', from),
-              const SizedBox(height: AppSpacing.base),
-              _buildCopyField(context, 'To', to),
-              if (batchIndex != null) ...[
+              _buildField(
+                context,
+                'Amount',
+                '${weiToEth(item.amountWei)} ETH',
+              ),
+              if (item.fromAddress != null && item.fromAddress!.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.base),
-                _buildField(context, 'Batch', '#$batchIndex'),
+                _buildCopyField(context, 'From', item.fromAddress!),
               ],
-              if (createdAt.isNotEmpty) ...[
+              if (item.toAddress != null && item.toAddress!.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.base),
-                _buildField(context, 'Created', createdAt),
+                _buildCopyField(context, 'To', item.toAddress!),
+              ],
+              if (item.txHash != null && item.txHash!.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.base),
+                _buildCopyField(context, 'Tx hash', item.txHash!),
+              ],
+              if (item.batchIndex != null) ...[
+                const SizedBox(height: AppSpacing.base),
+                _buildField(context, 'Batch', '#${item.batchIndex}'),
+              ],
+              const SizedBox(height: AppSpacing.base),
+              _buildField(
+                context,
+                'Time',
+                item.timestamp.toLocal().toString().split('.').first,
+              ),
+              if (item.status == ActivityStatus.pending && item.type == ActivityType.send) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.base),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryAccent.withValues(alpha: 0.08),
+                    borderRadius: AppRadius.cardBorder,
+                    border: Border.all(
+                      color: AppColors.primaryAccent.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        size: 18,
+                        color: AppColors.primaryAccent,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'Pending batch creation — intents are grouped and settled on-chain periodically.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ],
           ),
@@ -51,14 +119,15 @@ class IntentDetailScreen extends StatelessWidget {
     );
   }
 
-  Color _statusColor(String status) {
+  Color _statusColor(ActivityStatus status) {
     switch (status) {
-      case 'batched':
+      case ActivityStatus.batched:
+      case ActivityStatus.confirmed:
         return AppColors.secondaryGold;
-      case 'pending':
+      case ActivityStatus.failed:
+        return AppColors.danger;
+      case ActivityStatus.pending:
         return AppColors.primaryAccent;
-      default:
-        return AppColors.textMuted;
     }
   }
 
@@ -81,13 +150,13 @@ class IntentDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCopyField(BuildContext context, String label, String address) {
+  Widget _buildCopyField(BuildContext context, String label, String value) {
     return FlatCard(
       onTap: () {
-        Clipboard.setData(ClipboardData(text: address));
+        Clipboard.setData(ClipboardData(text: value));
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$label address copied')),
+          SnackBar(content: Text('$label copied to clipboard')),
         );
       },
       child: Row(
@@ -96,7 +165,7 @@ class IntentDetailScreen extends StatelessWidget {
           const Spacer(),
           Flexible(
             child: Text(
-              shortenAddress(address),
+              shortenAddress(value),
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     fontFamily: 'SpaceGrotesk',
                   ),
