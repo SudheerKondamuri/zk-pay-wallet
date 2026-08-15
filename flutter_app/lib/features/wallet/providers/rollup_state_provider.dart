@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants.dart';
 import '../../../providers/services_providers.dart';
+import 'wallet_providers.dart';
 
 /// Rollup state from GET /state — polls every ~8s.
 /// Drives the signature node-graph visualization.
@@ -36,13 +37,20 @@ class RollupStateNotifier extends AsyncNotifier<RollupState> {
   }
 
   Future<RollupState> _fetch() async {
-    final api = ref.read(apiServiceProvider);
-    final data = await api.getRollupState();
-    final rollup = RollupState.fromJson(data);
-    if (rollup.contractAddress.isNotEmpty) {
-      ref.read(walletServiceProvider).setContractAddress(rollup.contractAddress);
+    ref.read(isSyncingProvider.notifier).state = true;
+    try {
+      final api = ref.read(apiServiceProvider);
+      final data = await api.getRollupState();
+      final rollup = RollupState.fromJson(data);
+      if (rollup.contractAddress.isNotEmpty) {
+        ref.read(walletServiceProvider).setContractAddress(rollup.contractAddress);
+      }
+      return rollup;
+    } finally {
+      Future.delayed(const Duration(milliseconds: 350), () {
+        ref.read(isSyncingProvider.notifier).state = false;
+      });
     }
-    return rollup;
   }
 
   void _startPolling() {
