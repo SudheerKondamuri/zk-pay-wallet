@@ -20,12 +20,34 @@ final secureStorageServiceProvider = Provider<SecureStorageService>((ref) {
   return SecureStorageService();
 });
 
-/// Fetches contract address once from GET /state and caches it.
-final contractAddressProvider = FutureProvider<String>((ref) async {
-  final api = ref.read(apiServiceProvider);
-  final state = await api.getRollupState();
-  final address = state['contractAddress'] as String;
-  // Also set it on the wallet service for RPC calls.
-  ref.read(walletServiceProvider).setContractAddress(address);
-  return address;
-});
+/// Fetches contract address from GET /state and caches it, with auto-retry.
+class ContractAddressNotifier extends AsyncNotifier<String> {
+  @override
+  Future<String> build() async {
+    return _fetch();
+  }
+
+  Future<String> _fetch() async {
+    final api = ref.read(apiServiceProvider);
+    final state = await api.getRollupState();
+    final address = state['contractAddress'] as String;
+    // Also set it on the wallet service for RPC calls.
+    ref.read(walletServiceProvider).setContractAddress(address);
+    return address;
+  }
+
+  Future<String> ensureAddress() async {
+    if (state.hasValue && state.value!.isNotEmpty) {
+      ref.read(walletServiceProvider).setContractAddress(state.value!);
+      return state.value!;
+    }
+    final addr = await _fetch();
+    state = AsyncData(addr);
+    return addr;
+  }
+}
+
+final contractAddressProvider =
+    AsyncNotifierProvider<ContractAddressNotifier, String>(
+  ContractAddressNotifier.new,
+);

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/theme.dart';
-import 'core/router.dart';
+import 'app/app.dart';
+import 'app/theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,20 +16,4 @@ void main() {
   ));
 
   runApp(const ProviderScope(child: ZKVaultApp()));
-}
-
-class ZKVaultApp extends ConsumerWidget {
-  const ZKVaultApp({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final router = buildRouter(ref);
-
-    return MaterialApp.router(
-      title: 'ZK Vault',
-      debugShowCheckedModeBanner: false,
-      theme: buildVerdigrisTheme(),
-      routerConfig: router,
-    );
-  }
 }

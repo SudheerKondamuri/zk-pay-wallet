@@ -19,8 +19,21 @@ const pool = new Pool({
   port: parseInt(process.env.POSTGRES_PORT || '5432'),
 });
 
+function getAddressesFilePath(): string {
+  const candidatePaths = [
+    path.join(process.cwd(), 'deployments', 'addresses.json'),
+    path.join(__dirname, '..', 'deployments', 'addresses.json'),
+    path.join(__dirname, '..', '..', 'deployments', 'addresses.json'),
+    '/app/deployments/addresses.json'
+  ];
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidatePaths[0];
+}
+
 async function getProviderAndContract() {
-  const addressesPath = path.join(__dirname, '..', '..', 'deployments', 'addresses.json');
+  const addressesPath = getAddressesFilePath();
   const addresses = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
   const rpcUrl = process.env.RPC_URL || addresses.rpcUrl || 'http://127.0.0.1:8545';
   

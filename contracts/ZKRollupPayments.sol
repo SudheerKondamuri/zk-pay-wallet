@@ -114,12 +114,18 @@ contract ZKRollupPayments {
         uint256[] calldata publicInputs
     ) external whenNotPaused nonReentrant {
         require(_relayers[msg.sender], "ZKRollup: not relayer");
+        require(newStateRoot != bytes32(0), "ZKRollup: invalid state root");
+        require(txCount > 0, "ZKRollup: empty batch");
+
+        if (publicInputs.length >= 2) {
+            require(bytes32(publicInputs[0]) == currentStateRoot, "ZKRollup: old state root mismatch");
+            require(bytes32(publicInputs[1]) == newStateRoot, "ZKRollup: new state root mismatch");
+        }
+
         require(
             IZKVerifier(verifier).verifyProof(proof, publicInputs),
             "ZKRollup: invalid proof"
         );
-        require(newStateRoot != bytes32(0), "ZKRollup: invalid state root");
-        require(txCount > 0, "ZKRollup: empty batch");
 
         bytes32 oldStateRoot = currentStateRoot;
         currentStateRoot = newStateRoot;
@@ -165,12 +171,21 @@ contract ZKRollupPayments {
         require(amount > 0, "ZKRollup: amount zero");
         require(!executedWithdrawals[withdrawalHash], "ZKRollup: already executed");
         require(address(this).balance >= amount, "ZKRollup: insufficient contract balance");
+
+        if (publicInputs.length >= 1) {
+            require(bytes32(publicInputs[0]) == withdrawalHash, "ZKRollup: withdrawal hash mismatch");
+        }
+
         require(
             IZKVerifier(verifier).verifyProof(proof, publicInputs),
             "ZKRollup: invalid proof"
         );
 
         executedWithdrawals[withdrawalHash] = true;
+
+        if (deposits[msg.sender] >= amount) {
+            deposits[msg.sender] -= amount;
+        }
 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         require(success, "ZKRollup: transfer failed");

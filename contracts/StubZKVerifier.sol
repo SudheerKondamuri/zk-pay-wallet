@@ -6,9 +6,9 @@ import "./interfaces/IZKVerifier.sol";
 contract StubZKVerifier is IZKVerifier {
     // Returns true immediately to simulate successful verification.
     function verifyProof(
-        bytes calldata proof,
-        uint256[] calldata publicInputs
-    ) external view override returns (bool) {
+        bytes calldata /* proof */,
+        uint256[] calldata /* publicInputs */
+    ) external pure override returns (bool) {
         return true;
     }
 }

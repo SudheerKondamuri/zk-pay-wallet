@@ -28,8 +28,21 @@ const pool = new Pool({
 let rollupContract: ethers.Contract;
 let provider: ethers.JsonRpcProvider;
 
+function getAddressesFilePath(): string {
+  const candidatePaths = [
+    path.join(process.cwd(), 'deployments', 'addresses.json'),
+    path.join(__dirname, '..', 'deployments', 'addresses.json'),
+    path.join(__dirname, '..', '..', 'deployments', 'addresses.json'),
+    '/app/deployments/addresses.json'
+  ];
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidatePaths[0];
+}
+
 async function setupEthers() {
-  const addressesPath = path.join(__dirname, '..', '..', 'deployments', 'addresses.json');
+  const addressesPath = getAddressesFilePath();
   if (!fs.existsSync(addressesPath)) {
     console.error('addresses.json not found!');
     return;
@@ -53,25 +66,25 @@ app.post('/intents', async (req, res) => {
     
     // Calculate L2 Balance from DB
     const depositResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_deposits FROM deposits WHERE user_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_deposits FROM deposits WHERE LOWER(user_address) = LOWER($1)`,
       [fromAddress]
     );
     const totalDeposits = BigInt(depositResult.rows[0].total_deposits);
 
     const withdrawalResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_withdrawals FROM withdrawals WHERE user_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_withdrawals FROM withdrawals WHERE LOWER(user_address) = LOWER($1)`,
       [fromAddress]
     );
     const totalWithdrawals = BigInt(withdrawalResult.rows[0].total_withdrawals);
 
     const sentResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_sent FROM payment_intents WHERE from_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_sent FROM payment_intents WHERE LOWER(from_address) = LOWER($1)`,
       [fromAddress]
     );
     const totalSent = BigInt(sentResult.rows[0].total_sent);
 
     const receivedResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_received FROM payment_intents WHERE to_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_received FROM payment_intents WHERE LOWER(to_address) = LOWER($1)`,
       [fromAddress]
     );
     const totalReceived = BigInt(receivedResult.rows[0].total_received);
@@ -85,7 +98,7 @@ app.post('/intents', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO payment_intents (from_address, to_address, amount_wei, status) 
        VALUES ($1, $2, $3, 'pending') RETURNING id`,
-      [fromAddress, toAddress, amountWei]
+      [fromAddress.toLowerCase(), toAddress.toLowerCase(), amountWei]
     );
     
     res.status(201).json({ intentId: result.rows[0].id, status: 'pending' });
@@ -103,7 +116,7 @@ app.get('/intents', async (req, res) => {
     
     if (address) {
       params.push(address);
-      query += ` AND from_address = $${params.length}`;
+      query += ` AND (LOWER(from_address) = LOWER($${params.length}) OR LOWER(to_address) = LOWER($${params.length}))`;
     }
     if (status) {
       params.push(status);
@@ -148,25 +161,25 @@ app.get('/deposits/:address', async (req, res) => {
     
     // Calculate L2 Balance from DB
     const depositResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_deposits FROM deposits WHERE user_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_deposits FROM deposits WHERE LOWER(user_address) = LOWER($1)`,
       [address]
     );
     const totalDeposits = BigInt(depositResult.rows[0].total_deposits);
 
     const withdrawalResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_withdrawals FROM withdrawals WHERE user_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_withdrawals FROM withdrawals WHERE LOWER(user_address) = LOWER($1)`,
       [address]
     );
     const totalWithdrawals = BigInt(withdrawalResult.rows[0].total_withdrawals);
 
     const sentResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_sent FROM payment_intents WHERE from_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_sent FROM payment_intents WHERE LOWER(from_address) = LOWER($1)`,
       [address]
     );
     const totalSent = BigInt(sentResult.rows[0].total_sent);
 
     const receivedResult = await pool.query(
-      `SELECT COALESCE(SUM(amount_wei), 0) as total_received FROM payment_intents WHERE to_address = $1`,
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_received FROM payment_intents WHERE LOWER(to_address) = LOWER($1)`,
       [address]
     );
     const totalReceived = BigInt(receivedResult.rows[0].total_received);
@@ -210,7 +223,7 @@ async function startServer() {
   await runMigrations();
   await setupEthers();
   
-  app.listen(PORT, () => {
+  app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Express API listening on port ${PORT}`);
   });
 }
