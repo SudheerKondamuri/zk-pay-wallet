@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants.dart';
@@ -34,12 +35,34 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.base),
+        child: RefreshIndicator(
+          color: AppColors.primaryAccent,
+          backgroundColor: AppColors.surfaceFlat,
+          strokeWidth: 2.5,
+          displacement: 32,
+          edgeOffset: 0,
+          onRefresh: () async {
+            HapticFeedback.mediumImpact();
+            try {
+              await Future.wait([
+                ref.read(l2BalanceProvider(address).notifier).refresh(),
+                ref.read(onChainDepositProvider(address).notifier).refresh(),
+                ref.read(rollupStateProvider.notifier).refresh(),
+              ]);
+            } catch (_) {
+              // Ignore transient network errors during refresh
+            }
+            HapticFeedback.lightImpact();
+          },
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: AppSpacing.base),
               // App bar row
               Row(
                 children: [
@@ -213,8 +236,9 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _ActionButton extends StatelessWidget {
