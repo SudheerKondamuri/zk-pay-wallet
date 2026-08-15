@@ -17,20 +17,30 @@ class L2BalanceNotifier extends FamilyAsyncNotifier<String, String> {
   }
 
   Future<String> _fetchBalance(String address) async {
-    final api = ref.read(apiServiceProvider);
-    final data = await api.getDeposit(address);
-    final balanceWei = data['balanceWei'] as String? ?? '0';
+    ref.read(isSyncingProvider.notifier).state = true;
+    try {
+      final api = ref.read(apiServiceProvider);
+      final data = await api.getDeposit(address);
+      final balanceWei = data['balanceWei'] as String? ?? '0';
 
-    // Incoming-transfer detection: compare to previous value.
-    if (_previousBalance != '0' && balanceWei != _previousBalance) {
-      final current = BigInt.parse(balanceWei);
-      final previous = BigInt.parse(_previousBalance);
-      if (current > previous) {
-        // Balance increased — an incoming transfer arrived.
+      // Incoming-transfer detection: compare to previous value.
+      if (_previousBalance != '0' && balanceWei != _previousBalance) {
+        final current = BigInt.parse(balanceWei);
+        final previous = BigInt.parse(_previousBalance);
+        if (current > previous) {
+          final diff = current - previous;
+          ref.read(incomingTransferProvider.notifier).state =
+              IncomingTransferEvent(diff.toString(), DateTime.now());
+        }
       }
+      _previousBalance = balanceWei;
+      ref.read(lastUpdatedProvider.notifier).state = DateTime.now();
+      return balanceWei;
+    } finally {
+      Future.delayed(const Duration(milliseconds: 350), () {
+        ref.read(isSyncingProvider.notifier).state = false;
+      });
     }
-    _previousBalance = balanceWei;
-    return balanceWei;
   }
 
   void _startPolling(String address) {
@@ -107,3 +117,20 @@ final onChainDepositProvider =
     AsyncNotifierProvider.family<OnChainDepositNotifier, String, String>(
   OnChainDepositNotifier.new,
 );
+
+/// Event emitted when an incoming transfer is detected on L2.
+class IncomingTransferEvent {
+  final String amountWei;
+  final DateTime timestamp;
+  const IncomingTransferEvent(this.amountWei, this.timestamp);
+}
+
+final incomingTransferProvider =
+    StateProvider<IncomingTransferEvent?>((ref) => null);
+
+/// Tracks the timestamp of the last successful balance refresh.
+final lastUpdatedProvider = StateProvider<DateTime>((ref) => DateTime.now());
+
+/// Pulses true when active polling / network sync occurs.
+final isSyncingProvider = StateProvider<bool>((ref) => false);
+
