@@ -68,6 +68,7 @@ class WalletService {
   static final _depositsFunction = ContractFunction(
     'deposits',
     [FunctionParameter('', AddressType())],
+    outputs: [FunctionParameter('', UintType(length: 256))],
   );
 
   /// Read on-chain deposits(address) — returns Wei as decimal string.
@@ -143,6 +144,27 @@ class WalletService {
 
   /// Validate a mnemonic phrase.
   bool validateMnemonic(String mnemonic) => bip39.validateMnemonic(mnemonic);
+
+  /// Polls for transaction receipt until mined or timeout.
+  Future<TransactionReceipt?> waitForReceipt(
+    String txHash, {
+    Duration timeout = const Duration(seconds: 60),
+    Duration interval = const Duration(seconds: 1),
+  }) async {
+    final startTime = DateTime.now();
+    while (DateTime.now().difference(startTime) < timeout) {
+      try {
+        final receipt = await web3.getTransactionReceipt(txHash);
+        if (receipt != null) {
+          return receipt;
+        }
+      } catch (_) {
+        // Suppress transient RPC receipt polling errors
+      }
+      await Future.delayed(interval);
+    }
+    return null;
+  }
 
   void dispose() {
     _web3?.dispose();
