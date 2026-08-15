@@ -266,11 +266,28 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
                 loading: () => const SkeletonLoader(lineCount: 4),
-                error: (e, stack) => Text('Failed to load state',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: AppColors.danger)),
+                error: (e, stack) => FlatCard(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    ref.invalidate(rollupStateProvider);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.refresh, size: 16, color: AppColors.primaryAccent),
+                        const SizedBox(width: AppSpacing.sm),
+                        Text(
+                          'Failed to load state. Tap to retry.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: AppSpacing.xl),
             ],
