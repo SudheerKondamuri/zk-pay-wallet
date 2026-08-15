@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants.dart';
 import '../../../app/router.dart';
@@ -9,7 +10,7 @@ import '../../../shared/app_button.dart';
 /// Screen 13 — Transaction Result. Success/failure with next actions.
 class TransactionResultScreen extends StatelessWidget {
   final bool success;
-  final String type; // 'send' | 'withdraw'
+  final String type; // 'send' | 'deposit' | 'withdraw'
   final String amount;
   final String? toAddress;
   final String? txHash;
@@ -22,6 +23,19 @@ class TransactionResultScreen extends StatelessWidget {
     this.toAddress,
     this.txHash,
   });
+
+  String _title() {
+    if (!success) return 'Transaction failed';
+    switch (type) {
+      case 'deposit':
+        return 'Deposit confirmed';
+      case 'withdraw':
+        return 'Withdrawal confirmed';
+      case 'send':
+      default:
+        return 'Intent submitted';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,9 +66,7 @@ class TransactionResultScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               Text(
-                success
-                    ? (type == 'send' ? 'Intent Submitted' : 'Withdrawal Sent')
-                    : 'Transaction Failed',
+                _title(),
                 style: Theme.of(context).textTheme.displaySmall,
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -76,16 +88,34 @@ class TransactionResultScreen extends StatelessWidget {
               ],
               if (txHash != null) ...[
                 const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Tx: ${shortenAddress(txHash!)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontFamily: 'SpaceGrotesk',
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: txHash!));
+                    HapticFeedback.lightImpact();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Transaction hash copied')),
+                    );
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Tx: ${shortenAddress(txHash!)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontFamily: 'SpaceGrotesk',
+                              color: AppColors.primaryAccent,
+                            ),
                       ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.copy, size: 14, color: AppColors.primaryAccent),
+                    ],
+                  ),
                 ),
               ],
               const Spacer(),
               AppButton(
-                label: 'Back to Dashboard',
+                label: 'Back to dashboard',
                 onPressed: () => context.go(AppRoutes.dashboard),
                 width: double.infinity,
               ),
