@@ -72,7 +72,7 @@ class _ReviewSignSheetState extends ConsumerState<ReviewSignSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Confirm Transfer',
+            'Confirm transfer',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -93,7 +93,7 @@ class _ReviewSignSheetState extends ConsumerState<ReviewSignSheet> {
                 const SizedBox(height: AppSpacing.md),
                 _DetailRow(
                   label: 'Type',
-                  value: 'L2 Intent',
+                  value: 'L2 intent',
                 ),
               ],
             ),
@@ -105,7 +105,7 @@ class _ReviewSignSheetState extends ConsumerState<ReviewSignSheet> {
           ),
           const SizedBox(height: AppSpacing.lg),
           AppButton(
-            label: 'Sign & Submit',
+            label: 'Sign and submit',
             onPressed: _sign,
             isLoading: _isSigning,
             icon: Icons.check,
