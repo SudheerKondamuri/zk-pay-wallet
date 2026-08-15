@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Thin wrapper over flutter_secure_storage.
@@ -107,6 +108,42 @@ class SecureStorageService {
 
   Future<String?> getApiBaseUrlOverride() async {
     return _storage.read(key: _apiBaseUrlOverrideKey);
+  }
+
+  // --- Local Activity Log (Deposits & Withdrawals) ---
+
+  Future<void> saveLocalActivity(String address, Map<String, dynamic> activityJson) async {
+    final key = 'local_activities_${address.toLowerCase()}';
+    final existingRaw = await _storage.read(key: key);
+    List<dynamic> list = [];
+    if (existingRaw != null && existingRaw.isNotEmpty) {
+      try {
+        list = jsonDecode(existingRaw) as List<dynamic>;
+      } catch (_) {
+        list = [];
+      }
+    }
+    // Prepend or replace if exists
+    final id = activityJson['id'] as String;
+    final index = list.indexWhere((e) => e['id'] == id);
+    if (index != -1) {
+      list[index] = activityJson;
+    } else {
+      list.insert(0, activityJson);
+    }
+    await _storage.write(key: key, value: jsonEncode(list));
+  }
+
+  Future<List<Map<String, dynamic>>> getLocalActivities(String address) async {
+    final key = 'local_activities_${address.toLowerCase()}';
+    final existingRaw = await _storage.read(key: key);
+    if (existingRaw == null || existingRaw.isEmpty) return [];
+    try {
+      final list = jsonDecode(existingRaw) as List<dynamic>;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
   }
 
   // --- Full wipe ---
