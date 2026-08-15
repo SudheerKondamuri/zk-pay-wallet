@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +33,34 @@ class DashboardScreen extends ConsumerWidget {
     final l2Balance = ref.watch(l2BalanceProvider(address));
     final onChainBalance = ref.watch(onChainDepositProvider(address));
     final rollupState = ref.watch(rollupStateProvider);
+
+    // Incoming transfer toast
+    ref.listen<IncomingTransferEvent?>(incomingTransferProvider, (previous, next) {
+      if (next != null) {
+        HapticFeedback.mediumImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.surfaceFlat,
+            behavior: SnackBarBehavior.floating,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.cardBorder),
+            content: Row(
+              children: [
+                const Icon(Icons.arrow_downward, color: AppColors.primaryAccent, size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Received ${formatBalance(next.amountWei)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    });
 
     return Scaffold(
       body: SafeArea(
@@ -87,8 +116,14 @@ class DashboardScreen extends ConsumerWidget {
               GlassCard(
                 child: Column(
                   children: [
-                    Text('L2 Balance',
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('L2 Balance',
+                            style: Theme.of(context).textTheme.bodyMedium),
+                        const LiveSyncBadge(),
+                      ],
+                    ),
                     const SizedBox(height: AppSpacing.sm),
                     l2Balance.when(
                       data: (wei) => Text(
@@ -280,3 +315,82 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
+
+/// Dynamic live synchronization indicator and freshness timer.
+class LiveSyncBadge extends ConsumerStatefulWidget {
+  const LiveSyncBadge({super.key});
+
+  @override
+  ConsumerState<LiveSyncBadge> createState() => _LiveSyncBadgeState();
+}
+
+class _LiveSyncBadgeState extends ConsumerState<LiveSyncBadge> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lastUpdated = ref.watch(lastUpdatedProvider);
+    final isSyncing = ref.watch(isSyncingProvider);
+
+    final diff = DateTime.now().difference(lastUpdated);
+    String label;
+    if (isSyncing) {
+      label = 'Syncing...';
+    } else if (diff.inSeconds < 5) {
+      label = 'Updated just now';
+    } else if (diff.inSeconds < 60) {
+      label = 'Updated ${diff.inSeconds}s ago';
+    } else {
+      label = 'Updated ${diff.inMinutes}m ago';
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSyncing
+                ? AppColors.primaryAccent
+                : AppColors.primaryAccent.withValues(alpha: 0.6),
+            boxShadow: isSyncing
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryAccent.withValues(alpha: 0.7),
+                      blurRadius: 6,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textMuted,
+                fontSize: 11,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
