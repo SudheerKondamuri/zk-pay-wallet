@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS deposits (
   id SERIAL PRIMARY KEY,
   user_address VARCHAR(42) NOT NULL,
   amount_wei NUMERIC(78,0) NOT NULL,
-  tx_hash VARCHAR(66) NOT NULL,
+  tx_hash VARCHAR(66) UNIQUE NOT NULL,
   block_number INTEGER NOT NULL,
   indexed_at TIMESTAMPTZ DEFAULT NOW(),
   batch_id INTEGER
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   id SERIAL PRIMARY KEY,
   user_address VARCHAR(42) NOT NULL,
   amount_wei NUMERIC(78,0) NOT NULL,
-  tx_hash VARCHAR(66) NOT NULL,
+  tx_hash VARCHAR(66) UNIQUE NOT NULL,
   block_number INTEGER NOT NULL,
   indexed_at TIMESTAMPTZ DEFAULT NOW(),
   batch_id INTEGER
@@ -46,3 +46,5 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 
 ALTER TABLE deposits ADD COLUMN IF NOT EXISTS batch_id INTEGER;
 ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS batch_id INTEGER;
+CREATE UNIQUE INDEX IF NOT EXISTS deposits_tx_hash_idx ON deposits (tx_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS withdrawals_tx_hash_idx ON withdrawals (tx_hash);
