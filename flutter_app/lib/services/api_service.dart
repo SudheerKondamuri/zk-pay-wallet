@@ -105,6 +105,44 @@ class ApiService {
     return json.decode(response.body) as Map<String, dynamic>;
   }
 
+  /// POST /withdrawals → { status, userAddress, amountWei, txHash, blockNumber }
+  Future<Map<String, dynamic>> submitWithdrawal(
+    String userAddress,
+    String amountWei,
+  ) async {
+    final response = await client.post(
+      Uri.parse('$_baseUrl/withdrawals'),
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({
+        'userAddress': userAddress,
+        'amountWei': amountWei,
+      }),
+    );
+    if (response.statusCode == 400) {
+      final body = json.decode(response.body) as Map<String, dynamic>;
+      throw ApiException(
+        body['error'] as String? ?? 'Insufficient balance or invalid amount',
+        400,
+      );
+    }
+    if (response.statusCode != 200) {
+      throw ApiException('Failed to process withdrawal', response.statusCode);
+    }
+    return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  /// GET /withdrawals/:address → { withdrawals: [...] }
+  Future<List<dynamic>> getWithdrawals(String address) async {
+    final response = await client.get(
+      Uri.parse('$_baseUrl/withdrawals/$address'),
+    );
+    if (response.statusCode != 200) {
+      throw ApiException('Failed to fetch withdrawals', response.statusCode);
+    }
+    final body = json.decode(response.body) as Map<String, dynamic>;
+    return body['withdrawals'] as List<dynamic>;
+  }
+
   void dispose() {
     _client?.close();
   }
