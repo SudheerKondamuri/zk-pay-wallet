@@ -239,12 +239,19 @@ app.post('/withdrawals', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient L2 balance for withdrawal' });
     }
 
-    const addressesPath = getAddressesFilePath();
-    const addresses = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
+    const contract = getRollupContract();
+    const targetAddress = await contract.getAddress();
+    const contractEthBalance = await provider.getBalance(targetAddress);
+    if (contractEthBalance < BigInt(amountWei)) {
+      return res.status(400).json({ 
+        error: `Vault contract liquidity (${ethers.formatEther(contractEthBalance)} ETH) is insufficient for this withdrawal.` 
+      });
+    }
+
     const relayerPk = process.env.RELAYER_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
     const relayerWallet = new ethers.Wallet(relayerPk, provider);
     
-    const contractWithRelayer = rollupContract.connect(relayerWallet) as ethers.Contract;
+    const contractWithRelayer = contract.connect(relayerWallet) as ethers.Contract;
     const tx = await contractWithRelayer.withdrawTo(userAddress, BigInt(amountWei));
     const receipt = await tx.wait();
 
