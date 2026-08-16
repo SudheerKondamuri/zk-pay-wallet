@@ -145,12 +145,19 @@ app.get('/batches/:batchIndex', async (req, res) => {
     const { batchIndex } = req.params;
     const batchResult = await pool.query('SELECT * FROM batches WHERE batch_index = $1', [batchIndex]);
     const intentsResult = await pool.query('SELECT * FROM payment_intents WHERE batch_id = $1', [batchIndex]);
+    const depositsResult = await pool.query('SELECT * FROM deposits WHERE batch_id = $1', [batchIndex]);
+    const withdrawalsResult = await pool.query('SELECT * FROM withdrawals WHERE batch_id = $1', [batchIndex]);
     
     if (batchResult.rows.length === 0) {
       return res.status(404).json({ error: 'Batch not found' });
     }
     
-    res.json({ batch: batchResult.rows[0], intents: intentsResult.rows });
+    res.json({ 
+      batch: batchResult.rows[0], 
+      intents: intentsResult.rows,
+      deposits: depositsResult.rows,
+      withdrawals: withdrawalsResult.rows
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
