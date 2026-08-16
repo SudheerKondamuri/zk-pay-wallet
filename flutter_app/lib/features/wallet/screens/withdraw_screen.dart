@@ -32,10 +32,11 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   @override
   void initState() {
     super.initState();
-    // Refresh on-chain balance on screen entry
+    // Refresh balances on screen entry
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final wallet = ref.read(walletServiceProvider);
       if (wallet.isLoaded) {
+        ref.read(l2BalanceProvider(wallet.address).notifier).refresh();
         ref.read(onChainDepositProvider(wallet.address).notifier).refresh();
       }
     });
@@ -66,80 +67,53 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
     });
 
     final wallet = ref.read(walletServiceProvider);
+    final api = ref.read(apiServiceProvider);
+    final storage = ref.read(secureStorageServiceProvider);
 
     try {
-      final contractAddress = await ref
-          .read(contractAddressProvider.notifier)
-          .ensureAddress();
-      wallet.setContractAddress(contractAddress);
+      // Check live L2 spendable balance
+      final l2Data = await api.getDeposit(wallet.address);
+      final l2BalanceWei = l2Data['balanceWei'] as String? ?? '0';
 
-      // Check live on-chain deposit ceiling directly from node
-      final liveCeiling = await wallet.getOnChainDeposit(wallet.address);
-      if (BigInt.parse(weiString) > BigInt.parse(liveCeiling)) {
+      if (BigInt.parse(weiString) > BigInt.parse(l2BalanceWei)) {
         setState(() {
           _step = WithdrawStep.idle;
-          _error = 'Exceeds on-chain balance (${formatBalance(liveCeiling)})';
+          _error = 'Exceeds available balance (${formatBalance(l2BalanceWei)})';
         });
         return;
       }
 
-      // Broadcast withdrawal transaction
-      final txHash = await wallet.withdraw(weiString);
+      // Execute rollup withdrawal via backend relayer exit
+      final result = await api.submitWithdrawal(wallet.address, weiString);
+      final txHash = result['txHash'] as String? ?? '';
+
       HapticFeedback.mediumImpact();
 
-      final storage = ref.read(secureStorageServiceProvider);
       final activity = ActivityItem(
-        id: txHash,
+        id: txHash.isNotEmpty ? txHash : DateTime.now().millisecondsSinceEpoch.toString(),
         type: ActivityType.withdraw,
         amountWei: weiString,
         fromAddress: wallet.address,
-        txHash: txHash,
+        txHash: txHash.isNotEmpty ? txHash : null,
         timestamp: DateTime.now(),
-        status: ActivityStatus.pending,
+        status: ActivityStatus.confirmed,
       );
       await storage.saveLocalActivity(wallet.address, activity.toJson());
 
-      if (!mounted) return;
-      setState(() {
-        _step = WithdrawStep.confirming;
-        _txHash = txHash;
-      });
-
-      // Poll for on-chain block confirmation
-      final receipt = await wallet.waitForReceipt(txHash);
+      ref.read(onChainDepositProvider(wallet.address).notifier).refresh();
+      ref.read(l2BalanceProvider(wallet.address).notifier).refresh();
 
       if (!mounted) return;
-
-      if (receipt != null) {
-        await storage.saveLocalActivity(
-          wallet.address,
-          activity.copyWith(status: ActivityStatus.confirmed).toJson(),
-        );
-
-        ref.read(onChainDepositProvider(wallet.address).notifier).refresh();
-        ref.read(l2BalanceProvider(wallet.address).notifier).refresh();
-
-        if (!mounted) return;
-        HapticFeedback.mediumImpact();
-        context.push(
-          AppRoutes.transactionResult,
-          extra: {
-            'success': true,
-            'type': 'withdraw',
-            'amount': amountText,
-            'txHash': txHash,
-          },
-        );
-      } else {
-        await storage.saveLocalActivity(
-          wallet.address,
-          activity.copyWith(status: ActivityStatus.failed).toJson(),
-        );
-        setState(() {
-          _step = WithdrawStep.idle;
-          _error = 'Confirmation timed out. Check your transaction on-chain.';
-        });
-      }
+      HapticFeedback.mediumImpact();
+      context.push(
+        AppRoutes.transactionResult,
+        extra: {
+          'success': true,
+          'type': 'withdraw',
+          'amount': amountText,
+          'txHash': txHash,
+        },
+      );
     } catch (e, stack) {
       debugPrint('Withdraw error: $e\n$stack');
       HapticFeedback.heavyImpact();
@@ -147,18 +121,16 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
         final msg = e.toString();
         setState(() {
           _step = WithdrawStep.idle;
-          if (msg.contains('insufficient balance') || msg.contains('insufficient funds')) {
-            _error = 'Insufficient on-chain balance to complete withdrawal';
-          } else if (msg.contains('amount zero')) {
+          if (msg.contains('Insufficient') || msg.contains('insufficient')) {
+            _error = 'Insufficient rollup balance to complete withdrawal';
+          } else if (msg.contains('Amount must be greater than 0') || msg.contains('amount zero')) {
             _error = 'Withdrawal amount must be greater than zero';
-          } else if (msg.contains('ZKRollup: paused') || msg.contains('paused')) {
+          } else if (msg.contains('paused')) {
             _error = 'Contract is temporarily paused';
-          } else if (msg.contains('transfer failed')) {
-            _error = 'Contract transfer failed. Check contract balance.';
-          } else if (msg.contains('4000')) {
+          } else if (msg.contains('insufficient contract balance')) {
+            _error = 'Vault contract has insufficient liquidity for this withdrawal';
+          } else if (msg.contains('4000') || msg.contains('SocketException')) {
             _error = 'Cannot reach backend server. Check connection.';
-          } else if (msg.contains('8545') || msg.contains('SocketException')) {
-            _error = 'Cannot reach blockchain RPC node. Check connection.';
           } else {
             _error = 'Withdrawal could not be completed. Try again.';
           }
@@ -170,7 +142,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   @override
   Widget build(BuildContext context) {
     final wallet = ref.read(walletServiceProvider);
-    final onChain = ref.watch(onChainDepositProvider(wallet.address));
+    final l2Balance = ref.watch(l2BalanceProvider(wallet.address));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Withdraw')),
@@ -245,8 +217,8 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                   enabled: _step == WithdrawStep.idle,
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                // On-chain ceiling
-                onChain.when(
+                // L2 spendable balance ceiling
+                l2Balance.when(
                   data: (wei) => Align(
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
@@ -254,7 +226,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                         _amountController.text = weiToEth(wei);
                       },
                       child: Text(
-                        'Max: ${formatBalance(wei)}',
+                        'Available: ${formatBalance(wei)}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: AppColors.primaryAccent,
                             ),
