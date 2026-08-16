@@ -12,6 +12,7 @@ import '../../../providers/services_providers.dart';
 import '../providers/wallet_providers.dart';
 import '../../../shared/app_bottom_sheet.dart';
 import '../widgets/deposit_sheet.dart';
+import '../../../shared/flat_card.dart';
 import '../../../shared/glass_card.dart';
 import '../../../shared/signature_visual.dart';
 import '../../../shared/skeleton_loader.dart';
