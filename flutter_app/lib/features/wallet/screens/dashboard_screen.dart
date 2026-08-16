@@ -203,68 +203,130 @@ class DashboardScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.xl),
 
               // State root visualization
-              Text('Network State',
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.md),
               rollupState.when(
-                data: (state) => GlassCard(
-                  padding: const EdgeInsets.all(AppSpacing.base),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SignatureVisual(
-                        stateRoot: state.currentStateRoot,
-                        batchCount: state.batchCount,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('State Root',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall),
-                                const SizedBox(height: 2),
-                                Text(
-                                  shortenAddress(state.currentStateRoot),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelMedium
-                                      ?.copyWith(fontFamily: 'SpaceGrotesk'),
-                                ),
-                              ],
-                            ),
+                data: (state) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Network State',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryAccent
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: AppColors.primaryAccent
+                                    .withValues(alpha: 0.25)),
                           ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Batches',
-                                  style:
-                                      Theme.of(context).textTheme.bodySmall),
-                              const SizedBox(height: 2),
-                              GestureDetector(
-                                onTap: () =>
-                                    context.push(AppRoutes.batchExplorer),
-                                child: Text(
-                                  '${state.batchCount}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelLarge
-                                      ?.copyWith(
-                                        color: AppColors.primaryAccent,
-                                        fontFamily: 'SpaceGrotesk',
-                                      ),
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.primaryAccent,
+                                  shape: BoxShape.circle,
                                 ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                state.batchCount == 0
+                                    ? 'Genesis'
+                                    : '${state.batchCount} settled',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.primaryAccent,
+                                      fontFamily: 'SpaceGrotesk',
+                                      fontSize: 11,
+                                    ),
                               ),
                             ],
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    GestureDetector(
+                      onTap: () => context.push(AppRoutes.batchExplorer),
+                      child: GlassCard(
+                        padding: const EdgeInsets.all(AppSpacing.base),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SignatureVisual(
+                              stateRoot: state.currentStateRoot,
+                              batchCount: state.batchCount,
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text('State Root',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        shortenAddress(state.currentStateRoot),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium
+                                            ?.copyWith(
+                                                fontFamily: 'SpaceGrotesk'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('Batches',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '${state.batchCount}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(
+                                                color: AppColors.primaryAccent,
+                                                fontFamily: 'SpaceGrotesk',
+                                              ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Icon(
+                                          Icons.chevron_right,
+                                          size: 16,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 loading: () => const SkeletonLoader(lineCount: 4),
                 error: (e, stack) => FlatCard(
