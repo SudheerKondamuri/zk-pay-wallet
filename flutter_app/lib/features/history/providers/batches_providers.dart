@@ -1,10 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/services_providers.dart';
-import '../../wallet/providers/rollup_state_provider.dart';
 
-/// Fetches all batches. Auto-refreshes when rollup state updates.
+/// Fetches all batches on-demand with autoDispose.
 final batchesProvider = FutureProvider.autoDispose<List<dynamic>>((ref) async {
-  ref.watch(rollupStateProvider);
   final api = ref.read(apiServiceProvider);
   return api.getBatches();
 });
