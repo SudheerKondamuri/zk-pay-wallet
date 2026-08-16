@@ -54,7 +54,8 @@ async function setupEthers() {
   const contractAbi = [
     "function deposits(address) view returns (uint256)",
     "function currentStateRoot() view returns (bytes32)",
-    "function batchCount() view returns (uint256)"
+    "function batchCount() view returns (uint256)",
+    "function withdrawTo(address recipient, uint256 amount) external"
   ];
   
   rollupContract = new ethers.Contract(addresses.ZKRollupPayments, contractAbi, provider);
@@ -191,6 +192,89 @@ app.get('/deposits/:address', async (req, res) => {
       balanceWei: l2Balance.toString(),
       balanceEth: ethers.formatEther(l2Balance)
     });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/withdrawals', async (req, res) => {
+  try {
+    const { userAddress, amountWei } = req.body;
+    if (!userAddress || !amountWei) {
+      return res.status(400).json({ error: 'userAddress and amountWei are required' });
+    }
+
+    if (BigInt(amountWei) <= 0n) {
+      return res.status(400).json({ error: 'Amount must be greater than 0' });
+    }
+
+    // Calculate L2 Balance from DB
+    const depositResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_deposits FROM deposits WHERE LOWER(user_address) = LOWER($1)`,
+      [userAddress]
+    );
+    const totalDeposits = BigInt(depositResult.rows[0].total_deposits);
+
+    const withdrawalResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_withdrawals FROM withdrawals WHERE LOWER(user_address) = LOWER($1)`,
+      [userAddress]
+    );
+    const totalWithdrawals = BigInt(withdrawalResult.rows[0].total_withdrawals);
+
+    const sentResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_sent FROM payment_intents WHERE LOWER(from_address) = LOWER($1)`,
+      [userAddress]
+    );
+    const totalSent = BigInt(sentResult.rows[0].total_sent);
+
+    const receivedResult = await pool.query(
+      `SELECT COALESCE(SUM(amount_wei), 0) as total_received FROM payment_intents WHERE LOWER(to_address) = LOWER($1)`,
+      [userAddress]
+    );
+    const totalReceived = BigInt(receivedResult.rows[0].total_received);
+
+    const l2Balance = totalDeposits + totalReceived - totalWithdrawals - totalSent;
+
+    if (BigInt(amountWei) > l2Balance) {
+      return res.status(400).json({ error: 'Insufficient L2 balance for withdrawal' });
+    }
+
+    const addressesPath = getAddressesFilePath();
+    const addresses = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
+    const relayerPk = process.env.RELAYER_PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    const relayerWallet = new ethers.Wallet(relayerPk, provider);
+    
+    const contractWithRelayer = rollupContract.connect(relayerWallet) as ethers.Contract;
+    const tx = await contractWithRelayer.withdrawTo(userAddress, BigInt(amountWei));
+    const receipt = await tx.wait();
+
+    // Insert directly into withdrawals table so balance updates immediately
+    await pool.query(
+      `INSERT INTO withdrawals (user_address, amount_wei, tx_hash, block_number) VALUES ($1, $2, $3, $4)`,
+      [userAddress.toLowerCase(), amountWei.toString(), receipt.hash, receipt.blockNumber]
+    );
+
+    res.status(200).json({
+      status: 'confirmed',
+      userAddress,
+      amountWei,
+      txHash: receipt.hash,
+      blockNumber: receipt.blockNumber,
+    });
+  } catch (error: any) {
+    console.error('Withdrawal error:', error);
+    res.status(500).json({ error: error.message || 'Withdrawal execution failed' });
+  }
+});
+
+app.get('/withdrawals/:address', async (req, res) => {
+  try {
+    const { address } = req.params;
+    const result = await pool.query(
+      `SELECT * FROM withdrawals WHERE LOWER(user_address) = LOWER($1) ORDER BY id DESC`,
+      [address]
+    );
+    res.json({ withdrawals: result.rows });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
