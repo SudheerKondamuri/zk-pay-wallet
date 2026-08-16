@@ -115,7 +115,7 @@ class BatchExplorerScreen extends ConsumerWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: AppColors.surfaceBorder.withValues(alpha: 0.3),
+                                    color: AppColors.glassBorder,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
