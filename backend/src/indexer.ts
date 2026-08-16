@@ -64,7 +64,9 @@ async function main() {
           const amount = log.args[1];
           console.log(`[INDEXER] Deposited: user=${user}, amount=${amount.toString()}`);
           await pool.query(
-            `INSERT INTO deposits (user_address, amount_wei, tx_hash, block_number) VALUES ($1, $2, $3, $4)`,
+            `INSERT INTO deposits (user_address, amount_wei, tx_hash, block_number) 
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (tx_hash) DO NOTHING`,
             [user.toLowerCase(), amount.toString(), log.transactionHash, log.blockNumber]
           );
         }
@@ -94,7 +96,9 @@ async function main() {
           const amount = log.args[1];
           console.log(`[INDEXER] Withdrawn: user=${user}, amount=${amount.toString()}`);
           await pool.query(
-            `INSERT INTO withdrawals (user_address, amount_wei, tx_hash, block_number) VALUES ($1, $2, $3, $4)`,
+            `INSERT INTO withdrawals (user_address, amount_wei, tx_hash, block_number) 
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (tx_hash) DO NOTHING`,
             [user.toLowerCase(), amount.toString(), log.transactionHash, log.blockNumber]
           );
         }
