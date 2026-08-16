@@ -162,6 +162,22 @@ contract ZKRollupPayments {
         emit Withdrawn(msg.sender, amount);
     }
 
+    function withdrawTo(address payable recipient, uint256 amount) external whenNotPaused nonReentrant {
+        require(_relayers[msg.sender], "ZKRollup: not relayer");
+        require(recipient != address(0), "ZKRollup: zero address");
+        require(amount > 0, "ZKRollup: amount zero");
+        require(address(this).balance >= amount, "ZKRollup: insufficient contract balance");
+
+        if (deposits[recipient] >= amount) {
+            deposits[recipient] -= amount;
+        }
+
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "ZKRollup: transfer failed");
+
+        emit Withdrawn(recipient, amount);
+    }
+
     function withdrawWithProof(
         uint256 amount,
         bytes32 withdrawalHash,
