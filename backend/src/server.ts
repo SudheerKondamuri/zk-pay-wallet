@@ -264,7 +264,9 @@ app.post('/withdrawals', async (req, res) => {
 
     // Insert directly into withdrawals table so balance updates immediately
     await pool.query(
-      `INSERT INTO withdrawals (user_address, amount_wei, tx_hash, block_number) VALUES ($1, $2, $3, $4)`,
+      `INSERT INTO withdrawals (user_address, amount_wei, tx_hash, block_number) 
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tx_hash) DO NOTHING`,
       [userAddress.toLowerCase(), amountWei.toString(), receipt.hash, receipt.blockNumber]
     );
 
