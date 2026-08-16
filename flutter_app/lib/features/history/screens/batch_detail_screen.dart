@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants.dart';
-
+import '../../../app/theme.dart';
 import '../../../core/utils.dart';
 import '../providers/batches_providers.dart';
 import '../../../shared/error_state.dart';
@@ -174,7 +174,7 @@ class BatchDetailScreen extends ConsumerWidget {
                                   .labelLarge
                                   ?.copyWith(
                                     fontFamily: 'SpaceGrotesk',
-                                    color: AppColors.errorRed,
+                                    color: AppColors.danger,
                                   ),
                             ),
                           ],
