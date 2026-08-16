@@ -24,8 +24,12 @@ class BatchDetailScreen extends ConsumerWidget {
         data: (data) {
           final batch = data['batch'] as Map<String, dynamic>? ?? {};
           final intents = data['intents'] as List<dynamic>? ?? [];
+          final deposits = data['deposits'] as List<dynamic>? ?? [];
+          final withdrawals = data['withdrawals'] as List<dynamic>? ?? [];
           final stateRoot = batch['new_state_root'] as String? ?? '';
+          final oldRoot = batch['old_state_root'] as String? ?? '';
           final txHash = batch['tx_hash'] as String? ?? '';
+          final txCount = (batch['tx_count'] as num?)?.toInt() ?? (intents.length + deposits.length + withdrawals.length);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -40,8 +44,14 @@ class BatchDetailScreen extends ConsumerWidget {
                       _MetaRow(label: 'Batch index', value: '#$batchIndex'),
                       const SizedBox(height: AppSpacing.sm),
                       _MetaRow(
-                          label: 'State root',
+                          label: 'New state root',
                           value: shortenAddress(stateRoot)),
+                      if (oldRoot.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        _MetaRow(
+                            label: 'Previous root',
+                            value: shortenAddress(oldRoot)),
+                      ],
                       if (txHash.isNotEmpty) ...[
                         const SizedBox(height: AppSpacing.sm),
                         _MetaRow(
@@ -50,52 +60,129 @@ class BatchDetailScreen extends ConsumerWidget {
                       ],
                       const SizedBox(height: AppSpacing.sm),
                       _MetaRow(
-                          label: 'Intents',
-                          value: '${intents.length}'),
+                          label: 'Total actions',
+                          value: '$txCount'),
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                Text('Intents in this batch',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: AppSpacing.md),
-                // Intent list
-                ...intents.map((intent) {
-                  final i = intent as Map<String, dynamic>;
-                  final from = i['from_address'] as String? ?? '';
-                  final to = i['to_address'] as String? ?? '';
-                  final amountWei = i['amount_wei']?.toString() ?? '0';
+                if (intents.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Payments (${intents.length})',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: AppSpacing.md),
+                  ...intents.map((intent) {
+                    final i = intent as Map<String, dynamic>;
+                    final from = i['from_address'] as String? ?? '';
+                    final to = i['to_address'] as String? ?? '';
+                    final amountWei = i['amount_wei']?.toString() ?? '0';
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: FlatCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                '${shortenAddress(from)} → ${shortenAddress(to)}',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(fontFamily: 'SpaceGrotesk'),
-                              ),
-                              Text(
-                                '${weiToEth(amountWei)} ETH',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelLarge
-                                    ?.copyWith(fontFamily: 'SpaceGrotesk'),
-                              ),
-                            ],
-                          ),
-                        ],
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: FlatCard(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${shortenAddress(from)} → ${shortenAddress(to)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(fontFamily: 'SpaceGrotesk'),
+                            ),
+                            Text(
+                              '${weiToEth(amountWei)} ETH',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(
+                                    fontFamily: 'SpaceGrotesk',
+                                    color: AppColors.primaryAccent,
+                                  ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ],
+                if (deposits.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Deposits (${deposits.length})',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: AppSpacing.md),
+                  ...deposits.map((dep) {
+                    final d = dep as Map<String, dynamic>;
+                    final user = d['user_address'] as String? ?? '';
+                    final amountWei = d['amount_wei']?.toString() ?? '0';
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: FlatCard(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Deposit: ${shortenAddress(user)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(fontFamily: 'SpaceGrotesk'),
+                            ),
+                            Text(
+                              '+${weiToEth(amountWei)} ETH',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(
+                                    fontFamily: 'SpaceGrotesk',
+                                    color: AppColors.primaryAccent,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+                if (withdrawals.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Withdrawals (${withdrawals.length})',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: AppSpacing.md),
+                  ...withdrawals.map((wd) {
+                    final w = wd as Map<String, dynamic>;
+                    final user = w['user_address'] as String? ?? '';
+                    final amountWei = w['amount_wei']?.toString() ?? '0';
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: FlatCard(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Withdraw: ${shortenAddress(user)}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(fontFamily: 'SpaceGrotesk'),
+                            ),
+                            Text(
+                              '-${weiToEth(amountWei)} ETH',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(
+                                    fontFamily: 'SpaceGrotesk',
+                                    color: AppColors.errorRed,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
               ],
             ),
           );
