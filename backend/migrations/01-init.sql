@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS deposits (
   amount_wei NUMERIC(78,0) NOT NULL,
   tx_hash VARCHAR(66) NOT NULL,
   block_number INTEGER NOT NULL,
-  indexed_at TIMESTAMPTZ DEFAULT NOW()
+  indexed_at TIMESTAMPTZ DEFAULT NOW(),
+  batch_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS withdrawals (
@@ -39,5 +40,9 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   amount_wei NUMERIC(78,0) NOT NULL,
   tx_hash VARCHAR(66) NOT NULL,
   block_number INTEGER NOT NULL,
-  indexed_at TIMESTAMPTZ DEFAULT NOW()
+  indexed_at TIMESTAMPTZ DEFAULT NOW(),
+  batch_id INTEGER
 );
+
+ALTER TABLE deposits ADD COLUMN IF NOT EXISTS batch_id INTEGER;
+ALTER TABLE withdrawals ADD COLUMN IF NOT EXISTS batch_id INTEGER;
