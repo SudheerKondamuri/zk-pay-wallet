@@ -117,18 +117,6 @@ class _NodeGraphPainter extends CustomPainter {
       }
     }
 
-    // Draw scanning telemetry sweep line
-    final scanX = (progress * (size.width + 40)) - 20;
-    final scanPaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          teal.withValues(alpha: 0.0),
-          teal.withValues(alpha: 0.12),
-          teal.withValues(alpha: 0.0),
-        ],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(Rect.fromLTWH(scanX - 30, 0, 60, size.height));
-    canvas.drawRect(Rect.fromLTWH(scanX - 30, 0, 60, size.height), scanPaint);
 
     // Draw glowing nodes with halo and core
     for (int i = 0; i < nodes.length; i++) {
