@@ -25,7 +25,6 @@ const pool = new Pool({
   port: parseInt(process.env.POSTGRES_PORT || '5432'),
 });
 
-let rollupContract: ethers.Contract;
 let provider: ethers.JsonRpcProvider;
 
 function getAddressesFilePath(): string {
@@ -41,15 +40,16 @@ function getAddressesFilePath(): string {
   return candidatePaths[0];
 }
 
-async function setupEthers() {
+function getRollupContract(): ethers.Contract {
   const addressesPath = getAddressesFilePath();
   if (!fs.existsSync(addressesPath)) {
-    console.error('addresses.json not found!');
-    return;
+    throw new Error('addresses.json not found');
   }
   const addresses = JSON.parse(fs.readFileSync(addressesPath, 'utf8'));
   const rpcUrl = process.env.RPC_URL || addresses.rpcUrl || 'http://127.0.0.1:8545';
-  provider = new ethers.JsonRpcProvider(rpcUrl);
+  if (!provider) {
+    provider = new ethers.JsonRpcProvider(rpcUrl);
+  }
   
   const contractAbi = [
     "function deposits(address) view returns (uint256)",
@@ -58,7 +58,7 @@ async function setupEthers() {
     "function withdrawTo(address recipient, uint256 amount) external"
   ];
   
-  rollupContract = new ethers.Contract(addresses.ZKRollupPayments, contractAbi, provider);
+  return new ethers.Contract(addresses.ZKRollupPayments, contractAbi, provider);
 }
 
 app.post('/intents', async (req, res) => {
@@ -282,9 +282,10 @@ app.get('/withdrawals/:address', async (req, res) => {
 
 app.get('/state', async (req, res) => {
   try {
-    const currentStateRoot = await rollupContract.currentStateRoot();
-    const batchCount = await rollupContract.batchCount();
-    const targetAddress = await rollupContract.getAddress();
+    const contract = getRollupContract();
+    const currentStateRoot = await contract.currentStateRoot();
+    const batchCount = await contract.batchCount();
+    const targetAddress = await contract.getAddress();
     res.json({ 
       currentStateRoot, 
       batchCount: Number(batchCount), 
@@ -305,7 +306,6 @@ async function runMigrations() {
 const PORT = process.env.PORT || 4000;
 async function startServer() {
   await runMigrations();
-  await setupEthers();
   
   app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`Express API listening on port ${PORT}`);
