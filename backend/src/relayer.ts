@@ -53,46 +53,82 @@ async function getProviderAndContract() {
 
 async function runRelayer() {
   try {
-    const res = await pool.query(`SELECT * FROM payment_intents WHERE status = 'pending' ORDER BY created_at ASC LIMIT 10 FOR UPDATE SKIP LOCKED`);
-    if (res.rows.length === 0) return;
-    
-    const intents = res.rows;
-    console.log(`[RELAYER] Found ${intents.length} pending intents`);
-    
+    const intentsRes = await pool.query(
+      `SELECT * FROM payment_intents WHERE status = 'pending' ORDER BY created_at ASC LIMIT 10 FOR UPDATE SKIP LOCKED`
+    );
+    const depositsRes = await pool.query(
+      `SELECT * FROM deposits WHERE batch_id IS NULL ORDER BY indexed_at ASC LIMIT 10 FOR UPDATE SKIP LOCKED`
+    );
+    const withdrawalsRes = await pool.query(
+      `SELECT * FROM withdrawals WHERE batch_id IS NULL ORDER BY indexed_at ASC LIMIT 10 FOR UPDATE SKIP LOCKED`
+    );
+
+    const totalCount = intentsRes.rows.length + depositsRes.rows.length + withdrawalsRes.rows.length;
+    if (totalCount === 0) return;
+
+    console.log(
+      `[RELAYER] Found ${intentsRes.rows.length} intents, ${depositsRes.rows.length} deposits, ${withdrawalsRes.rows.length} withdrawals to batch`
+    );
+
     const { contract, wallet } = await getProviderAndContract();
-    
+
     let concatIds = "0x";
-    for (const intent of intents) {
+    for (const intent of intentsRes.rows) {
       concatIds += Buffer.from(intent.id.replace(/-/g, '')).toString('hex');
     }
+    for (const dep of depositsRes.rows) {
+      concatIds += Buffer.from(`dep_${dep.id}_${dep.tx_hash}`).toString('hex');
+    }
+    for (const wd of withdrawalsRes.rows) {
+      concatIds += Buffer.from(`wd_${wd.id}_${wd.tx_hash}`).toString('hex');
+    }
+
     const batchHash = ethers.keccak256(concatIds);
-    
     const oldRoot = await contract.currentStateRoot();
-    
     const newStateRoot = ethers.keccak256(
       ethers.solidityPacked(['bytes32', 'bytes32'], [oldRoot, batchHash])
     );
-    
-    const tx = await contract.commitBatch(newStateRoot, batchHash, intents.length, "0x", []);
+
+    const tx = await contract.commitBatch(newStateRoot, batchHash, totalCount, "0x", []);
     const receipt = await tx.wait();
-    
+
     const batchIndex = await contract.batchCount() - 1n;
-    
-    const intentIds = intents.map(i => i.id);
-    await pool.query(
-      `UPDATE payment_intents SET status = 'batched', batch_id = $1, updated_at = NOW() WHERE id = ANY($2)`,
-      [batchIndex.toString(), intentIds]
-    );
-    
+
+    if (intentsRes.rows.length > 0) {
+      const intentIds = intentsRes.rows.map((i: any) => i.id);
+      await pool.query(
+        `UPDATE payment_intents SET status = 'batched', batch_id = $1, updated_at = NOW() WHERE id = ANY($2)`,
+        [batchIndex.toString(), intentIds]
+      );
+    }
+
+    if (depositsRes.rows.length > 0) {
+      const depositIds = depositsRes.rows.map((d: any) => d.id);
+      await pool.query(
+        `UPDATE deposits SET batch_id = $1 WHERE id = ANY($2)`,
+        [batchIndex.toString(), depositIds]
+      );
+    }
+
+    if (withdrawalsRes.rows.length > 0) {
+      const withdrawalIds = withdrawalsRes.rows.map((w: any) => w.id);
+      await pool.query(
+        `UPDATE withdrawals SET batch_id = $1 WHERE id = ANY($2)`,
+        [batchIndex.toString(), withdrawalIds]
+      );
+    }
+
     await pool.query(
       `INSERT INTO batches (batch_index, old_state_root, new_state_root, batch_hash, tx_count, relayer_address, tx_hash) 
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (batch_index) DO UPDATE 
        SET old_state_root = EXCLUDED.old_state_root, tx_count = EXCLUDED.tx_count`,
-      [batchIndex.toString(), oldRoot, newStateRoot, batchHash, intents.length, wallet.address, receipt.hash]
+      [batchIndex.toString(), oldRoot, newStateRoot, batchHash, totalCount, wallet.address, receipt.hash]
     );
-    
-    console.log(`[RELAYER] Batch committed successfully. Batch index: ${batchIndex}`);
+
+    console.log(
+      `[RELAYER] Batch committed successfully. Batch index: ${batchIndex}, New State Root: ${newStateRoot}`
+    );
   } catch (e: any) {
     console.error("[RELAYER] Error during batch commit:", e);
   }
@@ -100,7 +136,7 @@ async function runRelayer() {
 
 async function main() {
   console.log("Relayer started...");
-  setInterval(runRelayer, 15000);
+  setInterval(runRelayer, 4000);
 }
 
 main().catch(console.error);
