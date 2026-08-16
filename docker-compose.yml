@@ -104,13 +104,13 @@ services:
         condition: service_completed_successfully
     command: npm run start:relayer
 
-  # flutter:
-  #   build:
-  #     context: ./flutter_app
-  #   ports:
-  #     - "8080:80"
-  #   depends_on:
-  #     - backend
+  flutter:
+    build:
+      context: ./flutter_app
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
 
 volumes:
   compiler-cache:
