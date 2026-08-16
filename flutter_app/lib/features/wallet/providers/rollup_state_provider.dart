@@ -33,11 +33,15 @@ class RollupStateNotifier extends AsyncNotifier<RollupState> {
   Future<RollupState> build() async {
     ref.onDispose(() => _timer?.cancel());
     _startPolling();
-    return _fetch();
+    return _fetch(triggerSync: false);
   }
 
-  Future<RollupState> _fetch() async {
-    ref.read(isSyncingProvider.notifier).state = true;
+  Future<RollupState> _fetch({bool triggerSync = false}) async {
+    if (triggerSync) {
+      Future.microtask(() {
+        ref.read(isSyncingProvider.notifier).state = true;
+      });
+    }
     try {
       final api = ref.read(apiServiceProvider);
       final data = await api.getRollupState();
@@ -47,16 +51,18 @@ class RollupStateNotifier extends AsyncNotifier<RollupState> {
       }
       return rollup;
     } finally {
-      Future.delayed(const Duration(milliseconds: 350), () {
-        ref.read(isSyncingProvider.notifier).state = false;
-      });
+      if (triggerSync) {
+        Future.delayed(const Duration(milliseconds: 350), () {
+          ref.read(isSyncingProvider.notifier).state = false;
+        });
+      }
     }
   }
 
   void _startPolling() {
     _timer = Timer.periodic(AppDuration.statePoll, (_) async {
       try {
-        final newState = await _fetch();
+        final newState = await _fetch(triggerSync: true);
         state = AsyncData(newState);
       } catch (e, st) {
         // If initial load failed, surface the error so UI stops loading skeleton
